@@ -1,11 +1,35 @@
-target/
-pom.xml.tag
-pom.xml.releaseBackup
-pom.xml.versionsBackup
-pom.xml.next
-release.properties
-dependency-reduced-pom.xml
-buildNumber.properties
-.mvn/timing.properties
-# https://github.com/takari/maven-wrapper#usage-without-binary-jar
-.mvn/wrapper/maven-wrapper.jar
+# use glob syntax. credit to deafult scala maven project structure
+syntax: glob
+*.ser
+*.class
+*~
+*.bak
+*.old
+movie-loader/target
+
+# eclipse conf file
+.settings
+.classpath
+.project
+.manager
+.scala_dependencies
+
+# idea
+.idea
+*.iml
+
+# building
+target
+build
+null
+tmp*
+temp*
+dist
+test-output
+build.log
+
+# other scm
+.svn
+.CVS
+.hg*
+
