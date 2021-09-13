@@ -13,6 +13,7 @@ class MovieLoader(spark: SparkSession, runInformation: RunInformation) {
   val TITLE_COLUMN_NAME = "title"
   val ABSTRACT_COLUMN_NAME = "abstract"
   val WIKI_ABSTRACT_COLUMN_NAME = "wikipedia_" + ABSTRACT_COLUMN_NAME
+  val PRODUCTION_COMPANIES_COLUMN_NAME = "production_companies"
   val RATING_COLUMN_NAME = "rating"
   val WIKI_LINK_COLUMN_NAME = "wikipedia_link"
   val REPLACE_PATTERN = "Wikipedia: "
@@ -25,20 +26,20 @@ class MovieLoader(spark: SparkSession, runInformation: RunInformation) {
   val PASSWORD = "password"
 import spark.implicits._
 
-  def runJob() = {
+  def runJob(): Unit = {
 
     val metaData: DataFrame = spark.read.option("header", true)
       .csv(runInformation.movieMetaDataPath)
       .withColumn(RATIO_COLUMN_NAME, col(REVENUE_COLUMN_NAME) / col(BUDGET_COLUMN_NAME))
       .withColumn(YEAR_COLUMN_NAME, year(col(RELEASE_DATE_COLUMN_NAME)))
-      .withColumnRenamed("production_companies", PRODUCTION_COMPANY_COLUMN_NAME)
+      .withColumnRenamed(PRODUCTION_COMPANIES_COLUMN_NAME, PRODUCTION_COMPANY_COLUMN_NAME)
       .withColumnRenamed(VOTE_AVERAGE_COLUMN_NAME, RATING_COLUMN_NAME)
 
     //cache to avoid re-read
     metaData.cache()
 
     //read in wikipedia data
-    val wikipediaData = spark.read.format("com.databricks.spark.xml").schema(Schemas.wikipediaDataSchema)
+    val wikipediaData: DataFrame = spark.read.format("com.databricks.spark.xml").schema(Schemas.wikipediaDataSchema)
       .option("rowTag", "doc")
       .load(runInformation.wikipediaDataPath)
       .withColumn(TITLE_COLUMN_NAME, regexp_replace(col(TITLE_COLUMN_NAME), REPLACE_PATTERN, ""))
@@ -46,26 +47,26 @@ import spark.implicits._
       .withColumnRenamed(URL_COLUMN_NAME, WIKI_LINK_COLUMN_NAME)
 
     //columns that will be selected for output
-    val selectedColumns = List(TITLE_COLUMN_NAME, BUDGET_COLUMN_NAME, YEAR_COLUMN_NAME, REVENUE_COLUMN_NAME,
+    val selectedColumns: List[String] = List(TITLE_COLUMN_NAME, BUDGET_COLUMN_NAME, YEAR_COLUMN_NAME, REVENUE_COLUMN_NAME,
       RATING_COLUMN_NAME, RATIO_COLUMN_NAME, PRODUCTION_COMPANY_COLUMN_NAME,
       WIKI_LINK_COLUMN_NAME, WIKI_ABSTRACT_COLUMN_NAME)
 
     //broadcast join faster, as metadata is small
-    val outputDf = wikipediaData.join(broadcast(metaData), Seq(TITLE_COLUMN_NAME)).select(selectedColumns.map(col): _*)
+    val filmDataOutput: DataFrame = wikipediaData.join(broadcast(metaData), Seq(TITLE_COLUMN_NAME)).select(selectedColumns.map(col): _*)
       .orderBy(desc(RATIO_COLUMN_NAME))
       .limit(runInformation.topAmount)
 
     //output with option to output to file
     if (runInformation.outputToFile) {
-      outputDf.write.csv(runInformation.outputPath)
+      filmDataOutput.write.csv(runInformation.outputPath)
     } else {
-      outputDf.write.mode(SaveMode.Overwrite).option("driver", "org.postgresql.Driver").jdbc(runInformation.dbUrl, runInformation.tableName,
+      filmDataOutput.write.mode(SaveMode.Overwrite).option("driver", "org.postgresql.Driver").jdbc(runInformation.dbUrl, runInformation.tableName,
         createDBProperties(runInformation.dbUser, runInformation.dbPassword))
     }
 
   }
-   def createDBProperties(user: String, password: String) = {
-     val connectionProperties = new Properties()
+   def createDBProperties(user: String, password: String): Properties = {
+     val connectionProperties: Properties = new Properties()
      connectionProperties.put(USER, user)
      connectionProperties.put(PASSWORD, password)
      connectionProperties
@@ -73,7 +74,7 @@ import spark.implicits._
 }
 object MovieLoader extends App {
 
-  val runInformation = AppConfig.loadRunInformation
+  private val runInformation: RunInformation = AppConfig.loadRunInformation
 
   private val spark = SparkSession.builder()
     .appName("truefilm movie loader")
@@ -81,6 +82,6 @@ object MovieLoader extends App {
     .master("local[*]")
     .getOrCreate()
 
-  private val movieLoader = new MovieLoader(spark, runInformation)
+  private val movieLoader: MovieLoader = new MovieLoader(spark, runInformation)
   movieLoader.runJob()
 }
